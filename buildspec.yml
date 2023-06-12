@@ -1,0 +1,50 @@
+version: 0.2
+phases:
+  install:
+    commands:
+    - DATETIME=$(TZ=UTC-8 date +"%Y-%m-%d %H:%M:%S")
+  pre_build:
+    commands:
+      - echo $CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo $CODEBUILD_START_TIME
+      - echo $setting_url
+      - cp server.json.example server.json
+      - go mod download
+      - go test ./... -count=1 -cover -timeout 120s
+    finally:
+       - echo "${CODEBUILD_BUILD_SUCCEEDING}"
+       - |
+         if expr "${CODEBUILD_BUILD_SUCCEEDING}" : "0" >/dev/null; then
+           echo "$line_token";
+           curl -X POST -H "Authorization:Bearer $line_token" -d "message=[AWS-CodeBuild:Fail-Test]%0D%0AARM: $CODEBUILD_BUILD_ARN%0D%0ACommitId: $CODEBUILD_RESOLVED_SOURCE_VERSION%0D%0ABuild Number: $CODEBUILD_BUILD_NUMBER%0D%0ADateTime: $DATETIME" https://notify-api.line.me/api/notify;
+         fi
+  build:
+    on-failure: ABORT
+    commands:
+      - echo "go build ..."
+      - GOOS=linux GOARCH=amd64 go build -ldflags '-X "github.com/AlienKingdom/serverless-account/helper.buildTime='"$DATETIME"'" -X "github.com/AlienKingdom/serverless-account/helper.version='"$CODEBUILD_RESOLVED_SOURCE_VERSION"'" -X "github.com/AlienKingdom/serverless-account/setting.settingUrl='"$setting_url"'" -X "github.com/AlienKingdom/serverless-account/helper.isLocal='false'"' -o main main.go
+      - echo "migrate ..."
+      - ./main migrate
+      - echo "compression zip ..."
+      - zip main.zip main
+    finally:  
+      - |
+         if expr "${CODEBUILD_BUILD_SUCCEEDING}" : "0" >/dev/null; then
+           echo "$line_token";
+           curl -X POST -H "Authorization:Bearer $line_token" -d "message=[AWS-CodeBuild:Fail-Build]%0D%0AARM: $CODEBUILD_BUILD_ARN%0D%0ACommitId: $CODEBUILD_RESOLVED_SOURCE_VERSION%0D%0ABuild Number: $CODEBUILD_BUILD_NUMBER%0D%0ADateTime: $DATETIME" https://notify-api.line.me/api/notify;
+         fi
+  post_build:
+    on-failure: ABORT
+    commands:
+      - echo "update lambda function ..."
+      - aws lambda update-function-code --function-name $lambda_function --zip-file fileb://main.zip
+      - echo "DONE!!"
+    finally:  
+      - |
+         if expr "${CODEBUILD_BUILD_SUCCEEDING}" : "0" >/dev/null; then
+           echo "$line_token";
+           curl -X POST -H "Authorization:Bearer $line_token" -d "message=[AWS-CodeBuild:Fail-Deploy]%0D%0AARM: $CODEBUILD_BUILD_ARN%0D%0ACommitId: $CODEBUILD_RESOLVED_SOURCE_VERSION%0D%0ABuild Number: $CODEBUILD_BUILD_NUMBER%0D%0ADateTime: $DATETIME" https://notify-api.line.me/api/notify;
+         fi
+cache:
+  paths:
+      - '/go/pkg/**/*'
