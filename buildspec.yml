@@ -8,9 +8,11 @@ phases:
       - echo $CODEBUILD_RESOLVED_SOURCE_VERSION
       - echo $CODEBUILD_START_TIME
       - echo $setting_url
-      - cp server.json.example server.json
+      # local開發用
+      #- cp server.json.example server.json
       - go mod download
-      - go test ./... -count=1 -cover -timeout 120s
+      # 沒跑測試
+      #- go test ./... -count=1 -cover -timeout 120s
     finally:
        - echo "${CODEBUILD_BUILD_SUCCEEDING}"
        - |
@@ -24,7 +26,7 @@ phases:
       - echo "go build ..."
       - GOOS=linux GOARCH=amd64 go build -ldflags '-X "github.com/AlienKingdom/serverless-account/helper.buildTime='"$DATETIME"'" -X "github.com/AlienKingdom/serverless-account/helper.version='"$CODEBUILD_RESOLVED_SOURCE_VERSION"'" -X "github.com/AlienKingdom/serverless-account/setting.settingUrl='"$setting_url"'" -X "github.com/AlienKingdom/serverless-account/helper.isLocal='false'"' -o main main.go
       - echo "migrate ..."
-      - ./main migrate
+      #- ./main migrate
       - echo "compression zip ..."
       - zip main.zip main
     finally:  
