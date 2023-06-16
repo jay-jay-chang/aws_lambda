@@ -3,6 +3,7 @@ package main
 import (
 	// go內建
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -12,6 +13,8 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	// gin框架
 	"github.com/gin-gonic/gin"
+	//redis
+	redis "github.com/redis/go-redis/v9"
 )
 
 var ginLambda *ginadapter.GinLambda
@@ -30,8 +33,50 @@ func init() {
 	//設定第二個
 	r.GET("/api1", api1)
 
+	//測試redis client
+	r.GET("/test_redis", func(c *gin.Context) {
+		TestRedisClient()
+		c.JSON(200, gin.H{
+			"message": "test redis",
+		})
+	})
+
 	// instance GinLambda object
 	ginLambda = ginadapter.New(r)
+}
+
+var redis_ctx = context.Background()
+
+// redis
+func TestRedisClient() {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "redis-test.y1emey.ng.0001.apne1.cache.amazonaws.com:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	err := rdb.Set(redis_ctx, "key", "value", 0).Err()
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := rdb.Get(redis_ctx, "key").Result()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("key", val)
+
+	val2, err := rdb.Get(redis_ctx, "key2").Result()
+	//redis.Nil為string, 找不到key時會回傳
+	if err == redis.Nil {
+		fmt.Println("key2 does not exist")
+	} else if err != nil {
+		panic(err)
+	} else {
+		fmt.Println("key2", val2)
+	}
+	// Output: key value
+	// key2 does not exist
 }
 
 func api1(c *gin.Context) {
